@@ -36,6 +36,19 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/book/latest", async (req, res) => {
+      const cursor = bookCollection
+        .find()
+        .sort({
+          addedAt: -1,
+        })
+        .limit(6);;
+
+      const result = await cursor.toArray();
+      console.log(result);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
