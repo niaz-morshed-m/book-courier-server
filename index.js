@@ -1,18 +1,15 @@
 const express = require("express");
 const app = express();
-const cors = require("cors")
+const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 3000;
 
 // middleware
-app.use(express.json())
-app.use(cors())
+app.use(express.json());
+app.use(cors());
 
-const uri = `mongodb+srv://${process.env.USER_NAME}:${
-  process.env.DB_PASS
-}@cluster0.7ybd4ac.mongodb.net/?appName=Cluster0`;
-
+const uri = `mongodb+srv://${process.env.USER_NAME}:${process.env.DB_PASS}@cluster0.7ybd4ac.mongodb.net/?appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -20,21 +17,25 @@ const client = new MongoClient(uri, {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  }
+  },
 });
-
 
 async function run() {
   try {
-const db = client.db("book-courier")
-const bookCollection = db.collection("books-collection")
-
-
-
-
-
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
+
+    const db = client.db("book-courier");
+    const bookCollection = db.collection("book-collection");
+
+    app.get("/book/all", async (req, res) => {
+      const cursor = bookCollection.find();
+
+      const result = await cursor.toArray();
+      console.log(result);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
