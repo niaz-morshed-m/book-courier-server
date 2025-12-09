@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 3000;
 
 // middleware
@@ -49,6 +49,22 @@ async function run() {
       res.send(result);
     });
 
+
+ app.get("/book/details/:id", async (req, res) => {
+      const id = req.params.id;
+    let query;
+    if (ObjectId.isValid(id)) {
+      query = {
+        $or: [{ _id: new ObjectId(id) }, { _id: id }],
+      };
+    } else {
+      query = { _id: id };
+    }
+      const result = await bookCollection.findOne(query);
+      res.send(result);
+    });
+
+    
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
