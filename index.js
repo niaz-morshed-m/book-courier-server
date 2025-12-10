@@ -66,15 +66,43 @@ async function run() {
     });
 
 
+    
+
+
  app.post("/order", async (req, res) => {
    const newOrder = req.body;
-
+newOrder.createdAt= new Date()
    const result = await orderCollection.insertOne(newOrder);
    res.send(result);
  });
 
 
+ app.get("/order/:email", async (req, res) => {
+   const email = req.params.email;
+   const query = {
+    email : email
+   }
 
+app.patch("/order/:id", async (req, res) => {
+  const id = req.params.id;
+  const updatedStatus = req.body;
+  let query;
+  if (ObjectId.isValid(id)) {
+    query = { _id: new ObjectId(id) };
+  } else {
+    query = { _id: id };
+  }
+
+  const update = { $set: { status: updatedStatus.status } };
+
+  const result = await orderCollection.updateOne(query, update);
+  res.send(result);
+});
+
+   const cursor =  orderCollection.find(query)
+   const result = await cursor.toArray();
+   res.send(result);
+ });
     
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
