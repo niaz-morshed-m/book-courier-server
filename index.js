@@ -27,12 +27,13 @@ async function run() {
 
     const db = client.db("book-courier");
     const bookCollection = db.collection("book-collection");
+    const orderCollection = db.collection("order-collection");
 
     app.get("/book/all", async (req, res) => {
       const cursor = bookCollection.find();
 
       const result = await cursor.toArray();
-      console.log(result);
+    
       res.send(result);
     });
 
@@ -45,7 +46,7 @@ async function run() {
         .limit(6);;
 
       const result = await cursor.toArray();
-      console.log(result);
+    
       res.send(result);
     });
 
@@ -63,6 +64,16 @@ async function run() {
       const result = await bookCollection.findOne(query);
       res.send(result);
     });
+
+
+ app.post("/order", async (req, res) => {
+   const newOrder = req.body;
+
+   const result = await orderCollection.insertOne(newOrder);
+   res.send(result);
+ });
+
+
 
     
     // Send a ping to confirm a successful connection
