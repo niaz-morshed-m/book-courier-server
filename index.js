@@ -29,6 +29,7 @@ async function run() {
     const db = client.db("book-courier");
     const bookCollection = db.collection("book-collection");
     const orderCollection = db.collection("order-collection");
+    const paymentCollection = db.collection("payment-collection")
 
     app.get("/book/all", async (req, res) => {
       const cursor = bookCollection.find();
@@ -113,61 +114,82 @@ async function run() {
       res.send(result);
     });
 
-    app.post('/create-checkout-session', async (req, res) => {
-        const paymentInfo = req.body;
-        const amount = parseInt(paymentInfo.cost) * 100;
+    app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = parseInt(paymentInfo.cost) * 100;
 
-        const session = await stripe.checkout.sessions.create({
-          line_items: [
-            {
-              price_data: {
-                currency: "USD",
-                unit_amount: amount,
-                product_data: {
-                  name: paymentInfo.bookName,
-                },
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              unit_amount: amount,
+              product_data: {
+                name: paymentInfo.bookName,
               },
-              quantity: 1,
             },
-          ],
-          customer_email: paymentInfo.email,
-          mode: "payment",
-          metadata: {
-           orderId: paymentInfo._id,
-            bookName: paymentInfo.bookName,
+            quantity: 1,
           },
-          success_url: `${process.env.SITE_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${process.env.SITE_URL}/dashboard/payment-cancelled`,
-        });
+        ],
+        customer_email: paymentInfo.email,
+        mode: "payment",
+        metadata: {
+          orderId: paymentInfo._id,
+          bookName: paymentInfo.bookName,
+        },
+        success_url: `${process.env.SITE_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_URL}/dashboard/payment-cancelled`,
+      });
 
-        
-        res.send({ url: session.url })
-    })
+      res.send({ url: session.url });
+    });
 
+    app.patch("/check-payment/:sessionId", async (req, res) => {
+      const sessionId = req.params.sessionId;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log(session);
 
+const transactionId = session.payment_intent;
+const query = { transactionId: transactionId };
 
-    app.patch('/check-payment/:sessionId', async (req, res)=>{
-const sessionId = req.params.sessionId
-const session = await stripe.checkout.sessions.retrieve(sessionId)
-console.log(session)
-if(session.payment_status==="paid"){
+const paymentExist = await paymentCollection.findOne(query);
 
-    const id = session.metadata.orderId
-    let query;
-    if (ObjectId.isValid(id)) {
-      query = {
-        $or: [{ _id: new ObjectId(id) }, { _id: id }],
-      };
-    } else {
-      query = { _id: id };
-    }
-    const update = { $set: { paymentStatus: "paid" } };
-
-    const result = await orderCollection.updateOne(query, update);
-res.send(result)
+if (paymentExist) {
+  return res.send({
+    message: "already payment exists",
+    transactionId,
+  });
 }
 
-    })
+
+      if (session.payment_status === "paid") {
+        const id = session.metadata.orderId;
+        let query;
+        if (ObjectId.isValid(id)) {
+          query = {
+            $or: [{ _id: new ObjectId(id) }, { _id: id }],
+          };
+        } else {
+          query = { _id: id };
+        }
+        const update = { $set: { paymentStatus: "paid" } };
+
+        const result = await orderCollection.updateOne(query, update);
+
+        const payment = {
+         orderId: session.metadata.orderId,
+          bookNameName: session.metadata.bookName,
+           customerEmail: session.customer_email,
+          amount: session.amount_total / 100,
+          currency: session.currency,
+          transactionId: session.payment_intent,
+          paidAt: new Date(),
+       
+        };
+      const paymentResult = await paymentCollection.insertOne(payment);
+        res.send(result);
+      }
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
@@ -186,5 +208,3 @@ run().catch(console.dir);
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
-
-
