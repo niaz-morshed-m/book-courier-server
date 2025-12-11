@@ -133,17 +133,41 @@ async function run() {
           customer_email: paymentInfo.email,
           mode: "payment",
           metadata: {
-            parcelId: paymentInfo._id,
-            parcelName: paymentInfo.bookName,
+           orderId: paymentInfo._id,
+            bookName: paymentInfo.bookName,
           },
           success_url: `${process.env.SITE_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${process.env.SITE_URL}/dashboard/payment-cancelled`,
         });
 
-        console.log(session)
+        
         res.send({ url: session.url })
     })
 
+
+
+    app.patch('/check-payment/:sessionId', async (req, res)=>{
+const sessionId = req.params.sessionId
+const session = await stripe.checkout.sessions.retrieve(sessionId)
+console.log(session)
+if(session.payment_status==="paid"){
+
+    const id = session.metadata.orderId
+    let query;
+    if (ObjectId.isValid(id)) {
+      query = {
+        $or: [{ _id: new ObjectId(id) }, { _id: id }],
+      };
+    } else {
+      query = { _id: id };
+    }
+    const update = { $set: { paymentStatus: "paid" } };
+
+    const result = await orderCollection.updateOne(query, update);
+res.send(result)
+}
+
+    })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
