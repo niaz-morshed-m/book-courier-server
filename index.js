@@ -5,10 +5,39 @@ require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_KEY);
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 3000;
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./book-courier-85a3d-firebase-adminsdk-fbsvc-546c04bdae.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 // middleware
 app.use(express.json());
 app.use(cors());
+
+const verifyToken = async (req, res, next) => {
+    const token = req.headers.authorization;
+
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+
+    try {
+        const extractedToken = token.split(' ')[1];
+        const decodedInfo = await admin.auth().verifyIdToken(extractedToken);
+        console.log('decoded in the token', decodedInfo);
+        req.decoded_email = decodedInfo.email;
+        next();
+    }
+    catch (err) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+
+
+}
+
 
 const uri = `mongodb+srv://${process.env.USER_NAME}:${process.env.DB_PASS}@cluster0.7ybd4ac.mongodb.net/?appName=Cluster0`;
 
@@ -113,6 +142,26 @@ async function run() {
       const result = await orderCollection.updateOne(query, update);
       res.send(result);
     });
+
+
+ app.get("/payment/:email", verifyToken , async (req, res) => {
+   const email = req.params.email;
+   console.log(req.headers)
+   const query = {};
+if(email){
+    query.customerEmail = email
+}
+
+  if (email !== req.decoded_email) {
+                    return res.status(403).send({ message: 'forbidden access' })
+                }
+            
+   const cursor = paymentCollection.find(query);
+   const result = await cursor.toArray();
+   res.send(result);
+ });
+
+
 
     app.post("/create-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
