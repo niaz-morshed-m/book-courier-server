@@ -56,9 +56,35 @@ async function run() {
     await client.connect();
 
     const db = client.db("book-courier");
+    const userCollection = db.collection("user-collection");
     const bookCollection = db.collection("book-collection");
     const orderCollection = db.collection("order-collection");
     const paymentCollection = db.collection("payment-collection")
+
+app.post('/user/create', async (req, res)=>{
+    const userInfo = req.body
+    userInfo.role = 'user'
+    userInfo.createdAt = new Date()
+      const email = req.body.email;
+      const query = { email: email };
+      const existingUser = await usersCollection.findOne(query);
+
+      if (existingUser) {
+        res.send("user already available");
+      } else {
+        const result = await usersCollection.insertOne(userInfo);
+        res.send(result);
+      }
+ 
+})
+
+
+
+app.get('/users', async (req, res)=>{
+    const cursor = userCollection.find()
+    const result = await cursor.toArray()
+    res.send(result)
+})
 
     app.get("/book/all", async (req, res) => {
       const cursor = bookCollection.find();
