@@ -86,6 +86,21 @@ app.get('/users', async (req, res)=>{
     res.send(result)
 })
 
+
+app.patch("/user/:id", async(req, res)=>{
+    const id = req.params.id
+    const updatedRole = req.body
+    const query = {
+      _id: new ObjectId(id)
+    };
+    const update = {$set:{
+role: updatedRole.role
+    }}
+
+const result = await userCollection.updateOne(query, update)
+res.send(result);
+})
+
     app.get("/book/all", async (req, res) => {
       const cursor = bookCollection.find();
 
