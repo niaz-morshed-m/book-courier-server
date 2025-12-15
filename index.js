@@ -136,6 +136,87 @@ res.send(result);
       res.send(result);
     });
 
+
+app.patch("/book/status/:id", async (req, res) => {
+  const id = req.params.id;
+  const updatedStatus = req.body;
+  let query;
+  if (ObjectId.isValid(id)) {
+    query = {
+      $or: [{ _id: new ObjectId(id) }, { _id: id }],
+    };
+  } else {
+    query = { _id: id };
+  }
+  const update = {
+    $set: {
+      status: updatedStatus.status,
+    },
+  };
+
+  const result = await bookCollection.updateOne(query, update);
+  res.send(result);
+});
+
+
+app.delete("/book/:id", async (req, res) => {
+  const id = req.params.id;
+
+  let bookQuery;
+  let orderQuery;
+
+  if (ObjectId.isValid(id)) {
+    bookQuery = {
+      $or: [{ _id: new ObjectId(id) }, { _id: id }],
+    };
+
+    orderQuery = {
+      $or: [{ bookId: new ObjectId(id) }, { bookId: id }],
+    };
+  } else {
+    bookQuery = { _id: id };
+    orderQuery = { bookId: id };
+  }
+
+  const orderResult = await orderCollection.deleteMany(orderQuery);
+  const bookResult = await bookCollection.deleteOne(bookQuery);
+
+  res.send({
+    bookDeleted: bookResult.deletedCount,
+    ordersDeleted: orderResult.deletedCount,
+  });
+});
+
+
+ app.post("/book/add", async (req, res) => {
+   const newBook = req.body;
+   const result = await bookCollection.insertOne(newBook);
+   res.send(result);
+ });
+
+ app.patch("/book/:id", async (req, res) => {
+    const id = req.params.id
+   const editedInfo = req.body;
+    let query;
+    if (ObjectId.isValid(id)) {
+      query = { _id: new ObjectId(id) };
+    } else {
+      query = { _id: id };
+    }
+   const update = {
+     $set: {
+       title: editedInfo.title,
+       author: editedInfo.author,
+       price: editedInfo.price,
+       inStock: editedInfo.inStock,
+       status: editedInfo.status,
+     },
+   };
+   const result = await bookCollection.updateOne(query,update)
+   res.send(result);
+ });
+
+
     app.post("/order", async (req, res) => {
       const newOrder = req.body;
       newOrder.createdAt = new Date();
@@ -143,13 +224,14 @@ res.send(result);
       res.send(result);
     });
 
-    app.get("/order/email/:email", async (req, res) => {
+    app.get("/books/librarian/:email", async (req, res) => {
       const email = req.params.email;
       const query = {
-        email: email,
+        librarianEmail: email,
       };
-      const cursor = orderCollection.find(query);
+      const cursor = bookCollection.find(query);
       const result = await cursor.toArray();
+     
       res.send(result);
     });
 
