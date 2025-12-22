@@ -145,7 +145,7 @@ async function run() {
           role: updatedRole.role,
         },
       };
-      console.log(id);
+    
       const result = await userCollection.updateOne(query, update);
       res.send(result);
     });
