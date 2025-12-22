@@ -86,7 +86,7 @@ async function run() {
       next();
     };
 
-    app.get("/users/:email/role", async (req, res) => {
+    app.get("/users/:email/role",verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { email };
       const user = await userCollection.findOne(query);
@@ -339,7 +339,9 @@ async function run() {
         const query = {
           librarianEmail: email,
         };
-        const cursor = bookCollection.find(query);
+        const cursor = bookCollection.find(query).sort({
+          addedAt: -1,
+        });
         const result = await cursor.toArray();
 
         res.send(result);
@@ -394,7 +396,9 @@ async function run() {
       const query = {
         email: email,
       };
-      const cursor = orderCollection.find(query);
+      const cursor = orderCollection.find(query).sort({
+        createdAt: -1,
+      });
       const result = await cursor.toArray();
 
       res.send(result);
@@ -409,7 +413,9 @@ async function run() {
         const query = {
           librarianEmail: librarianEmail,
         };
-        const cursor = orderCollection.find(query);
+        const cursor = orderCollection.find(query).sort({
+          createdAt: -1,
+        });
         const result = await cursor.toArray();
 
         res.send(result);
@@ -444,7 +450,9 @@ async function run() {
         return res.status(403).send({ message: "forbidden access" });
       }
 
-      const cursor = paymentCollection.find(query);
+      const cursor = paymentCollection.find(query).sort({
+        addedAt: -1,
+      });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -495,35 +503,37 @@ async function run() {
         });
       }
 
-      if (session.payment_status === "paid") {
-        const id = session.metadata.orderId;
-        let query;
-        if (ObjectId.isValid(id)) {
-          query = {
-            $or: [{ _id: new ObjectId(id) }, { _id: id }],
+      else{
+        if (session.payment_status === "paid") {
+          const id = session.metadata.orderId;
+          let query;
+          if (ObjectId.isValid(id)) {
+            query = {
+              $or: [{ _id: new ObjectId(id) }, { _id: id }],
+            };
+          } else {
+            query = { _id: id };
+          }
+          const update = { $set: { paymentStatus: "paid" } };
+
+          const result = await orderCollection.updateOne(query, update);
+
+          const payment = {
+            orderId: session.metadata.orderId,
+            bookNameName: session.metadata.bookName,
+            customerEmail: session.customer_email,
+            amount: session.amount_total / 100,
+            currency: session.currency,
+            transactionId: session.payment_intent,
+            paidAt: new Date(),
           };
-        } else {
-          query = { _id: id };
+          const paymentResult = await paymentCollection.insertOne(payment);
+          res.send(result);
         }
-        const update = { $set: { paymentStatus: "paid" } };
-
-        const result = await orderCollection.updateOne(query, update);
-
-        const payment = {
-          orderId: session.metadata.orderId,
-          bookNameName: session.metadata.bookName,
-          customerEmail: session.customer_email,
-          amount: session.amount_total / 100,
-          currency: session.currency,
-          transactionId: session.payment_intent,
-          paidAt: new Date(),
-        };
-        const paymentResult = await paymentCollection.insertOne(payment);
-        res.send(result);
       }
     });
 
-    app.get("/order/stats", verifyToken, verifyLibrarian, async (req, res) => {
+    app.get("/order/stats", verifyToken, verifyAdmin, async (req, res) => {
       const pipeline = [
         {
           $group: {
