@@ -7,7 +7,10 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 3000;
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./book-courier.json");
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+  "utf8"
+);
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -36,7 +39,6 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
-
 const uri = `mongodb+srv://${process.env.USER_NAME}:${process.env.DB_PASS}@cluster0.7ybd4ac.mongodb.net/?appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -51,7 +53,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const db = client.db("book-courier");
     const userCollection = db.collection("user-collection");
@@ -59,7 +61,7 @@ async function run() {
     const orderCollection = db.collection("order-collection");
     const paymentCollection = db.collection("payment-collection");
     const wishListCollection = db.collection("wishList-collection");
-
+    const reviewCollection = db.collection("review-collection");
     const verifyAdmin = async (req, res, next) => {
       const email = req.decoded_email;
 
@@ -296,10 +298,8 @@ async function run() {
         bookQuery = { _id: bookId };
       }
 
-     
       const book = await bookCollection.findOne(bookQuery);
 
-    
       if (book.inStock === 0) {
         return res.send({ message: "Book is out of stock" });
       }
@@ -312,7 +312,6 @@ async function run() {
 
       const update = { $inc: { inStock: -quantity } };
 
-   
       const updateResult = await bookCollection.updateOne(bookQuery, update);
 
       if (updateResult.modifiedCount === 0) {
@@ -321,7 +320,6 @@ async function run() {
         });
       }
 
-  
       newOrder.createdAt = new Date();
       const orderResult = await orderCollection.insertOne(newOrder);
 
@@ -354,7 +352,7 @@ async function run() {
       const result = await wishListCollection.insertOne(newWishlist);
       res.send(result);
     });
- 
+
     app.get("/wishlist/check", verifyToken, async (req, res) => {
       const { bookId, email } = req.query;
 
@@ -368,11 +366,13 @@ async function run() {
       res.send({ exists: !!exists });
     });
 
-app.get("/wishlist/:email", verifyToken, async (req, res) => {
-  const email = req.params.email;
-  const result = await wishListCollection.find({ userEmail: email }).toArray();
-  res.send(result);
-});
+    app.get("/wishlist/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const result = await wishListCollection
+        .find({ userEmail: email })
+        .toArray();
+      res.send(result);
+    });
 
     app.get("/order/id/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
@@ -523,9 +523,7 @@ app.get("/wishlist/:email", verifyToken, async (req, res) => {
       }
     });
 
-
-
-    app.get("/order/stats",verifyToken, verifyLibrarian, async (req, res) => {
+    app.get("/order/stats", verifyToken, verifyLibrarian, async (req, res) => {
       const pipeline = [
         {
           $group: {
@@ -544,52 +542,95 @@ app.get("/wishlist/:email", verifyToken, async (req, res) => {
       res.send(result);
     });
 
-    app.get("/librarian/orders/stats/:email",verifyToken, verifyLibrarian, async (req, res) => {
+    app.get(
+      "/librarian/orders/stats/:email",
+      verifyToken,
+      verifyLibrarian,
+      async (req, res) => {
+        try {
+          const email = req.params.email;
+
+          const pipeline = [
+            {
+              $match: { librarianEmail: email },
+            },
+            {
+              $group: {
+                _id: "$status",
+                count: { $sum: 1 },
+              },
+            },
+            {
+              $project: {
+                status: "$_id",
+                count: 1,
+                _id: 0,
+              },
+            },
+          ];
+
+          const result = await orderCollection.aggregate(pipeline).toArray();
+
+          const delivered =
+            result.find((item) => item.status === "delivered")?.count || 0;
+
+          const pending =
+            result.find((item) => item.status === "pending")?.count || 0;
+
+          const cancelled =
+            result.find((item) => item.status === "cancelled")?.count || 0;
+
+          res.send({
+            delivered,
+            pending,
+            cancelled,
+          });
+        } catch (error) {
+          res.status(500).send({ message: "Failed to get order stats" });
+        }
+      }
+    );
+
+    app.post("/reviews", verifyToken, async (req, res) => {
       try {
-        const email = req.params.email;
+        const review = req.body;
 
-        const pipeline = [
-          {
-            $match: { librarianEmail: email },
-          },
-          {
-            $group: {
-              _id: "$status",
-              count: { $sum: 1 },
-            },
-          },
-          {
-            $project: {
-              status: "$_id",
-              count: 1,
-              _id: 0,
-            },
-          },
-        ];
-
-        const result = await orderCollection.aggregate(pipeline).toArray();
-
-        const delivered =
-          result.find((item) => item.status === "delivered")?.count || 0;
-
-        const pending =
-          result.find((item) => item.status === "pending")?.count || 0;
-
-        const cancelled =
-          result.find((item) => item.status === "cancelled")?.count || 0;
-
-        res.send({
-          delivered,
-          pending,
-          cancelled,
+        const alreadyReviewed = await reviewCollection.findOne({
+          bookId: review.bookId,
+          userEmail: review.userEmail,
         });
+
+        if (alreadyReviewed) {
+          return res
+            .status(400)
+            .send({ message: "You already reviewed this book" });
+        }
+
+        review.createdAt = new Date();
+        const result = await reviewCollection.insertOne(review);
+        res.send(result);
       } catch (error) {
-        res.status(500).send({ message: "Failed to get order stats" });
+        res.status(500).send({ message: "Failed to add review" });
       }
     });
 
+    app.get("/reviews/:bookId", async (req, res) => {
+      const bookId = req.params.bookId;
+
+      const query = ObjectId.isValid(bookId)
+        ? { $or: [{ bookId: new ObjectId(bookId) }, { bookId }] }
+        : { bookId };
+
+      const result = await reviewCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
