@@ -185,7 +185,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/book/details/:id", verifyToken, async (req, res) => {
+    app.get("/book/details/:id", async (req, res) => {
       const id = req.params.id;
       let query;
       if (ObjectId.isValid(id)) {
